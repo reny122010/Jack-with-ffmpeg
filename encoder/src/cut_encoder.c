@@ -37,6 +37,7 @@
 
 #define AV_OUTPUT_FORMAT "mpegts"
 #define AV_OUTPUT_CODEC  "libx264"
+#define AUDIO_OUTPUT_CODEC "aac"
 
 #define AV_OUTPUT_BITRATE 2000000
 #define AV_OUTPUT_THREADS 16
@@ -154,7 +155,7 @@ int main(int argc, char** argv){
     tam_quad = sqrt(amount_of_quadrants);
     quadrant_line = atoi(argv[2]);
     quadrant_column = atoi(argv[3]);
-    amount_of_quadrants = quadrant_line * quadrant_column+1;
+    amount_of_quadrants = (quadrant_line * quadrant_column) + 1;
 
     strcpy (quadFileName, argv[4]);
 
@@ -188,6 +189,7 @@ int main(int argc, char** argv){
         printf ("no audio streams found\n");
         return -1;
     }
+    printf ("VIDEO ST %d, AUDIO ST %d\n", videoStreamIndex, audioStreamIndex);
 
     ff_input.audiocodecCtx = ff_input.formatCtx->streams[audioStreamIndex]->codec;
 	ff_input.codecCtx = ff_input.formatCtx->streams[videoStreamIndex]->codec;
@@ -214,8 +216,8 @@ int main(int argc, char** argv){
 			return -1;
 	}
 
-	//Initialize Output
-	for (i = 0; i < amount_of_quadrants; i++) {
+	//Initialize Video Output Streams
+	for (i = 0; i < amount_of_quadrants - 1; i++) {
 
 		ff_output[i].outStream = avformat_new_stream (formatCtx, NULL);
 		if (ff_output[i].outStream == NULL) {
@@ -298,8 +300,6 @@ int main(int argc, char** argv){
 		av_dict_set (&formatCtx->metadata, "service_name", start_time_str, 0);
 		av_dict_set (&formatCtx->metadata, "creation_time", start_time_str, 0);
 
-
-		printf ("about to open codec\n");
 		//Open codec
 		if (avcodec_open2(ff_output[i].codecCtx, ff_output[i].encoder, &codecOptions)) {
 			printf ("Could not open output codec...\n");
@@ -307,23 +307,45 @@ int main(int argc, char** argv){
 		}
 	}
 
-	ff_output[amount_of_quadrants-1].codecCtx = ff_output[amount_of_quadrants-1].outStream->codec;
+	//Initializing Audio Output
+	i = amount_of_quadrants-1; //Last stream
+	ff_output[i].outStream = avformat_new_stream (formatCtx, NULL);
+	if (ff_output[i].outStream == NULL) {
+		printf ("Could not create output stream\n");
+		return -1;
+	}
+
+	ff_output[i].outStream->id = formatCtx->nb_streams - 1;
+
+	ff_output[i].codecCtx = ff_output[i].outStream->codec;
+	ff_output[i].encoder = avcodec_find_encoder (ff_input.audiocodecCtx->codec_id);
+	if (ff_output[i].encoder == NULL) {
+		printf ("Codec %s not found..\n", AUDIO_OUTPUT_CODEC);
+		return -1;
+	}
   
-    printf("Seting the settings of output! \n");
-    ff_output[amount_of_quadrants-1].codecCtx = ff_output[amount_of_quadrants-1].outStream->codec;
-    ff_output[amount_of_quadrants-1].codecCtx->codec_id = ff_input.audiocodecCtx->codec_id;
-    ff_output[amount_of_quadrants-1].codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
-    ff_output[amount_of_quadrants-1].codecCtx->sample_fmt = ff_input.audiocodecCtx->sample_fmt;
-    ff_output[amount_of_quadrants-1].codecCtx->sample_rate = ff_input.audiocodecCtx->sample_rate;
-    printf("sample_rate %d\n", ff_input.codecCtx->sample_rate);
-    ff_output[amount_of_quadrants-1].codecCtx->channel_layout = ff_input.audiocodecCtx->channel_layout;
-    ff_output[amount_of_quadrants-1].codecCtx->channels = av_get_channel_layout_nb_channels(ff_output[amount_of_quadrants-1].codecCtx->channel_layout);
-    ff_output[amount_of_quadrants-1].codecCtx->bit_rate = ff_input.audiocodecCtx->bit_rate;  
-    ff_output[amount_of_quadrants-1].codecCtx->sample_aspect_ratio = ff_input.audiocodecCtx->sample_aspect_ratio;
-    ff_output[amount_of_quadrants-1].codecCtx->max_b_frames = ff_input.audiocodecCtx->max_b_frames;
-    ff_output[amount_of_quadrants-1].outStream->sample_aspect_ratio = ff_output[amount_of_quadrants-1].codecCtx->sample_aspect_ratio;
+    ff_output[i].codecCtx = ff_output[amount_of_quadrants-1].outStream->codec;
+    ff_output[i].codecCtx->codec_id = ff_input.audiocodecCtx->codec_id;
+    ff_output[i].codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
+    ff_output[i].codecCtx->sample_fmt = ff_input.audiocodecCtx->sample_fmt;
+    ff_output[i].codecCtx->sample_rate = ff_input.audiocodecCtx->sample_rate;
+    ff_output[i].codecCtx->channel_layout = ff_input.audiocodecCtx->channel_layout;
+    ff_output[i].codecCtx->channels = av_get_channel_layout_nb_channels(ff_output[amount_of_quadrants-1].codecCtx->channel_layout);
+    ff_output[i].codecCtx->bit_rate = ff_input.audiocodecCtx->bit_rate;  
+    ff_output[i].codecCtx->sample_aspect_ratio = ff_input.audiocodecCtx->sample_aspect_ratio;
+    ff_output[i].codecCtx->max_b_frames = ff_input.audiocodecCtx->max_b_frames;
+    ff_output[i].outStream->sample_aspect_ratio = ff_output[i].codecCtx->sample_aspect_ratio;
 
+    ff_output[i].outStream->time_base.num = ff_input.formatCtx->streams[audioStreamIndex]->time_base.num;
+	ff_output[i].outStream->time_base.den = ff_input.formatCtx->streams[audioStreamIndex]->time_base.den;
 
+	printf("sample_rate %d\n", ff_input.audiocodecCtx->sample_rate);
+
+	//Open codec
+	if (avcodec_open2(ff_output[i].codecCtx, ff_output[i].encoder, &codecOptions)) {
+		printf ("Could not open output codec...\n");
+		return -1;
+	}
 
 	av_dump_format (formatCtx, 0, quadFileName, 1);
 
@@ -348,9 +370,9 @@ int main(int argc, char** argv){
 		{
 			av_packet_ref  (&ff_output[amount_of_quadrants-1].packet, &ff_input.packet); 
             ff_output[amount_of_quadrants-1].packet.stream_index = amount_of_quadrants-1;
-            ff_output[amount_of_quadrants-1].packet.pts = incaudio;
+            // ff_output[amount_of_quadrants-1].packet.pts = incaudio;
 
-            printf("%lu\n", ff_output[amount_of_quadrants-1].packet.pts);
+            // printf("%lu\n", ff_output[amount_of_quadrants-1].packet.pts);
             if(gotPacket){
             	if (av_write_frame(formatCtx, &ff_output[amount_of_quadrants-1].packet) < 0) {
 	                printf ("Unable to write to output stream..\n");

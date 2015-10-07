@@ -38,7 +38,7 @@
 //TODO: This can, and should be adaptative. Easy mod :)
 #define AV_OUTPUT_FORMAT "mpegts"
 
-#define OUTPUT_FRAMERATE 24.0
+#define OUTPUT_FRAMERATE 48.0
 
 char _keepEncoder = 1;
 
@@ -218,23 +218,26 @@ int main(int argc, char** argv){
 
 		printf ("OUTPUT TO %s, at %lu\n", quadFileNames[i], start_time);
 	}
-	av_find_best_stream(ff_input.formatCtx, AVMEDIA_TYPE_AUDIO, -1, -1, &ff_input.audioencoder, 0);
+
+	i = amount_of_quadrants-1;
 	ff_input.audiocodecCtx = ff_input.formatCtx->streams[i]->codec;
 
-	if (avcodec_open2 (ff_input.audiocodecCtx, ff_input.audioencoder, NULL) < 0) {
-        printf ("Could not open input codec\n");
-        return -1;
-    }
+	// if (avcodec_open2 (ff_input.audiocodecCtx, ff_input.audioencoder, NULL) < 0) {
+ //        printf ("Could not open input codec\n");
+ //        return -1;
+ //    }
 
-    if (avformat_alloc_output_context2(&ff_output[i].formatCtx, NULL,"mp3" , quadFileNames[i]) < 0) {
+    if (avformat_alloc_output_context2(&ff_output[i].formatCtx, NULL, AV_OUTPUT_FORMAT, quadFileNames[i]) < 0) {
 			printf ("could not create output context\n");
 			return -1;
 	}
+
 	ff_output[i].outStream = avformat_new_stream (ff_output[i].formatCtx, NULL);
     if (ff_output[i].outStream == NULL) {
         printf ("Could not create output stream\n");
         return -1;
     }
+
     ff_output[i].codecCtx = ff_output[i].outStream->codec;
     ff_output[i].codecCtx->codec_id = ff_input.audiocodecCtx->codec_id;
 	ff_output[i].codecCtx = ff_output[i].outStream->codec;
@@ -246,6 +249,8 @@ int main(int argc, char** argv){
     ff_output[i].codecCtx->bit_rate = ff_input.audiocodecCtx->bit_rate;
     ff_output[i].codecCtx->sample_aspect_ratio = ff_input.audiocodecCtx->sample_aspect_ratio;
     ff_output[i].codecCtx->max_b_frames = ff_input.audiocodecCtx->max_b_frames;
+	ff_output[i].codecCtx->height 		= ff_input.audiocodecCtx->height;
+	ff_output[i].codecCtx->width 		= ff_input.audiocodecCtx->width;
     ff_output[i].outStream->sample_aspect_ratio = ff_output[i].codecCtx->sample_aspect_ratio;
 
   	av_dump_format (ff_output[i].formatCtx, 0, quadFileNames[i], 1);
