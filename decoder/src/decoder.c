@@ -359,7 +359,7 @@ int main(int argc, char **argv){
 				framePTS = av_frame_get_best_effort_timestamp (&frame);
 
 				frame_count = framePTS - ff_ctx->avInputCtx->streams[ff_ctx->audioIndexStream]->start_time;
-				frame_pts_offset = frame_count * av_q2d(ff_ctx->avInputCtx->streams[ff_ctx->audioIndexStream]->time_base) ; //frame_count * (timebase.num/timebase.den)
+				frame_pts_offset = frame_count * av_q2d(ff_ctx->avInputCtx->streams[ff_ctx->audioIndexStream]->time_base) ;
 
 				initPTS = start_time + frame_pts_offset + ff_ctx->ptsDelay;
 

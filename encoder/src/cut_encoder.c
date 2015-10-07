@@ -45,6 +45,7 @@
 
 #define AV_FRAMERATE 24
 
+#define PADDING_DATA 8
 //FFMPEG Input env
 typedef struct {
 	AVFormatContext *formatCtx;
@@ -365,6 +366,7 @@ int main(int argc, char** argv){
 
 
 	printf("Generating video streams...\n");
+	int pass_flag = 0;
 	while(av_read_frame (ff_input.formatCtx, &ff_input.packet) >= 0 && _keepEncoder) {
 		if (ff_input.packet.stream_index == audioStreamIndex)
 		{
@@ -373,13 +375,20 @@ int main(int argc, char** argv){
             // ff_output[amount_of_quadrants-1].packet.pts = incaudio;
 
             // printf("%lu\n", ff_output[amount_of_quadrants-1].packet.pts);
+            uint8_t * data = malloc(ff_output[amount_of_quadrants-1].packet.size);
+            memcpy(data, ff_output[amount_of_quadrants-1].packet.data,ff_output[amount_of_quadrants-1].packet.size - PADDING_DATA);
+            memcpy(data + (ff_output[amount_of_quadrants-1].packet.size - PADDING_DATA), &incaudio, PADDING_DATA);
+            free(ff_output[amount_of_quadrants-1].packet.data);
+            ff_output[amount_of_quadrants-1].packet.data = data;
+
             if(gotPacket){
             	if (av_write_frame(formatCtx, &ff_output[amount_of_quadrants-1].packet) < 0) {
 	                printf ("Unable to write to output stream..\n");
 	                pthread_exit(NULL);
             	}
+            	incaudio++;
             }            
-            incaudio++;
+            
 		}
 
 		if (ff_input.packet.stream_index == videoStreamIndex) {
@@ -420,9 +429,19 @@ int main(int argc, char** argv){
 													ff_output[i].codecCtx->time_base,
 													ff_output[i].outStream->time_base);
 
+							uint8_t * data = malloc(ff_output[i].packet.size);
+				            memcpy(data, ff_output[i].packet.data,ff_output[i].packet.size - PADDING_DATA);
+				            memcpy(data + (ff_output[i].packet.size - PADDING_DATA), &inc, PADDING_DATA);
+				            free(ff_output[i].packet.data);
+				            ff_output[i].packet.data = data;
+
+
 							if (av_write_frame (formatCtx, &ff_output[i].packet) < 0) {
 								printf ("Unable to write to output stream..\n");
 								pthread_exit(NULL);
+							}
+							if(!pass_flag){
+								pass_flag = 1;
 							}
 
 						}
@@ -438,7 +457,9 @@ int main(int argc, char** argv){
             	}
             	marginTop = 0; 
             	i = 0;
-            	inc++;
+            	if(pass_flag){            		
+            		inc++;
+            	}
 			}
 			av_frame_free (&ff_input.frame);
 		}

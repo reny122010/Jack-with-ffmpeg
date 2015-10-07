@@ -40,6 +40,8 @@
 
 #define OUTPUT_FRAMERATE 48.0
 
+#define PADDING_DATA 8
+
 char _keepEncoder = 1;
 
 //FFMPEG Input env
@@ -280,19 +282,35 @@ int main(int argc, char** argv){
 		pktt1 = getSystemTime(NULL);
 		if(ff_input.packet.stream_index == amount_of_quadrants-1){
 			i = ff_input.packet.stream_index;
+			long unsigned int * aux = malloc(PADDING_DATA);
 
 			av_packet_ref  (&ff_output[i].packet, &ff_input.packet); 
             ff_output[i].packet.stream_index = 0;
+
+            memcpy(aux,ff_output[i].packet.data + (ff_output[i].packet.size - PADDING_DATA),PADDING_DATA);
+            uint8_t * data = malloc(ff_output[i].packet.size - PADDING_DATA);
+            memcpy(data,ff_output[i].packet.data,ff_output[i].packet.size - PADDING_DATA);
+            free(ff_output[i].packet.data);
+            ff_output[i].packet.data = data;
+
 	        if (av_write_frame(ff_output[i].formatCtx, &ff_output[i].packet) < 0) {
 	            printf ("Unable to write to output stream..\n");
 	            pthread_exit(NULL);
 	        }
-		}else{
+		}
+		else{
 
 			i = ff_input.packet.stream_index;
 			 av_packet_ref	(&ff_output[i].packet, &ff_input.packet); 
 
 			 ff_output[i].packet.stream_index = videoOutputStreamIndex;
+
+			long unsigned int * aux = malloc(PADDING_DATA);
+			memcpy(aux,ff_output[i].packet.data + (ff_output[i].packet.size - PADDING_DATA),PADDING_DATA);
+            uint8_t * data = malloc(ff_output[i].packet.size - PADDING_DATA);
+            memcpy(data,ff_output[i].packet.data,ff_output[i].packet.size - PADDING_DATA);
+            free(ff_output[i].packet.data);
+            ff_output[i].packet.data = data;
 
 			if (av_write_frame (ff_output[i].formatCtx, &ff_output[i].packet) < 0) {
 				printf ("Unable to write to output stream..\n");
