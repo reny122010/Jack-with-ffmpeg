@@ -21,6 +21,8 @@
 
 //#define _DBG_PTS
 
+int syncbuffer, normalbuffer;
+
 typedef struct {
 	long double samplePTS;
 } audio_sync_sample_t;
@@ -80,6 +82,8 @@ void InitBF(int num_channels, audioBuffer_t *buffer, int size){
 void ProduceSyncToBuffer(audioBuffer_t *buffer, int channel, uint8_t *data, int data_size) {
 	if(buffer != NULL){
 		jack_ringbuffer_write (buffer->sync_buffers[channel], (char*) data, data_size);
+		syncbuffer++;
+		printf("SYNC BUFFER: %d\n",syncbuffer);
 		return;
 	}
 	return;
@@ -96,6 +100,8 @@ int PeekSyncFromBuffer (audioBuffer_t *buffer, int channel, uint8_t *data_out, i
 int ConsumeSyncFromBuffer(audioBuffer_t *buffer, int channel, uint8_t *data_out, int data_size) {
 	if(buffer != NULL) {
 		jack_ringbuffer_read(buffer->sync_buffers[channel], (char*) data_out, data_size);
+		syncbuffer--;
+		printf("SYNC BUFFER: %d\n",syncbuffer);
 		return data_size;
 	}
 	return -1;
@@ -104,6 +110,8 @@ int ConsumeSyncFromBuffer(audioBuffer_t *buffer, int channel, uint8_t *data_out,
 void ProduceAudioToBuffer(audioBuffer_t *buffer, int channel, uint8_t *data, int data_size) {
 	if(buffer != NULL){
 		jack_ringbuffer_write (buffer->to_audio_buffers[channel], (char*) data, data_size);
+		normalbuffer++;
+		printf("NORMAL BUFFER: %d\n",normalbuffer);
 		return;
 	}
 	return;
@@ -112,6 +120,8 @@ void ProduceAudioToBuffer(audioBuffer_t *buffer, int channel, uint8_t *data, int
 int ConsumeAudioFromBuffer(audioBuffer_t *buffer, int channel, uint8_t *data_out, int data_size) {
 	if(buffer != NULL) {
 		jack_ringbuffer_read(buffer->to_audio_buffers[channel], (char*) data_out, data_size);	
+		normalbuffer--;
+		printf("NORMAL BUFFER: %d\n",normalbuffer);
 		return data_size;
 	}
 	return -1;
@@ -144,7 +154,7 @@ int jack_process(jack_nframes_t nframes, void *notused){
     	if (bytes_in_buffer < nframes*sizeof(jack_sample_t))
     		continue;
 
-    	printf ("Jack process, bytes in buffer = %d\n", bytes_in_buffer);
+    	//printf ("Jack process, bytes in buffer = %d\n", bytes_in_buffer);
 		ConsumeAudioFromBuffer (&to_jack_buffer, i, (uint8_t*) buffers[i], nframes*sizeof(jack_sample_t));
     }
 
@@ -201,7 +211,7 @@ void *audioThreadFunction (void *threadArgs) {
 
 	long double nowTime, endTime, diffTime;
 
-	printf ("audioThread initialized for channel %d, with process size %d\n", channel, process_block_size );
+	//printf ("audioThread initialized for channel %d, with process size %d\n", channel, process_block_size );
 
 	int bytes_in_buffer;
 
@@ -217,11 +227,11 @@ void *audioThreadFunction (void *threadArgs) {
 	    diffTime = sync_sample[0].samplePTS - nowTime;
 
 	    if (diffTime > 0.0) {
-	    	printf ("bytes in buffer %d - difftime %Lf\n", bytes_in_buffer, diffTime);
+	    	//printf ("bytes in buffer %d - difftime %Lf\n", bytes_in_buffer, diffTime);
 	    	adaptativeSleep (diffTime);
 	    }
 	    else {
-	    	printf ("DISCARDED BLOCK difftime %Lf\n", diffTime);
+	    	//printf ("DISCARDED BLOCK difftime %Lf\n", diffTime);
 	    	ConsumeAudioFromBuffer(&to_audio_buffer, channel, (uint8_t*) sample_data, process_block_size*sizeof(jack_sample_t)); //Discard sample
 	    	continue;
 	    }
@@ -242,11 +252,19 @@ int main(int argc, char **argv){
 	int fifo_mid_prio = 0;	
 	struct sched_param fifo_param;
 
+	syncbuffer = 0;
+	normalbuffer = 0;
+
 	if(argc < 3){
-		printf("./<audio_decoder> udp://[IP]:[PORT] [ptsDelay]\n");
+		printf("./<audio_decoder> udp://[IP]:[PORT] [ptsDelay] [Amount of channel] [Channel 0] [Channel n]\n");
 		return 0;
 	}
 
+	if(argc != 3){
+
+	}
+
+	
 	ff_ctx = malloc(sizeof(ff_ctx_t));
 
 	av_register_all();

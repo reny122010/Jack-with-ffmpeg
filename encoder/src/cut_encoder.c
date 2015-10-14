@@ -45,7 +45,6 @@
 
 #define AV_FRAMERATE 24
 
-#define PADDING_DATA 8
 //FFMPEG Input env
 typedef struct {
 	AVFormatContext *formatCtx;
@@ -340,6 +339,9 @@ int main(int argc, char** argv){
     ff_output[i].outStream->time_base.num = ff_input.formatCtx->streams[audioStreamIndex]->time_base.num;
 	ff_output[i].outStream->time_base.den = ff_input.formatCtx->streams[audioStreamIndex]->time_base.den;
 
+	ff_output[i].codecCtx->time_base.num = ff_input.audiocodecCtx->time_base.num;
+	ff_output[i].codecCtx->time_base.den = ff_input.audiocodecCtx->time_base.den;
+
 	printf("sample_rate %d\n", ff_input.audiocodecCtx->sample_rate);
 
 	//Open codec
@@ -365,30 +367,23 @@ int main(int argc, char** argv){
 	printf ("OUTPUT TO %s, at %lu\n", quadFileName, start_time);
 
 
+	incaudio = 0;
 	printf("Generating video streams...\n");
-	int pass_flag = 0;
 	while(av_read_frame (ff_input.formatCtx, &ff_input.packet) >= 0 && _keepEncoder) {
 		if (ff_input.packet.stream_index == audioStreamIndex)
 		{
 			av_packet_ref  (&ff_output[amount_of_quadrants-1].packet, &ff_input.packet); 
             ff_output[amount_of_quadrants-1].packet.stream_index = amount_of_quadrants-1;
-            // ff_output[amount_of_quadrants-1].packet.pts = incaudio;
+            ff_output[amount_of_quadrants-1].packet.pts = incaudio;
 
             // printf("%lu\n", ff_output[amount_of_quadrants-1].packet.pts);
-            uint8_t * data = malloc(ff_output[amount_of_quadrants-1].packet.size);
-            memcpy(data, ff_output[amount_of_quadrants-1].packet.data,ff_output[amount_of_quadrants-1].packet.size - PADDING_DATA);
-            memcpy(data + (ff_output[amount_of_quadrants-1].packet.size - PADDING_DATA), &incaudio, PADDING_DATA);
-            free(ff_output[amount_of_quadrants-1].packet.data);
-            ff_output[amount_of_quadrants-1].packet.data = data;
-
-            if(gotPacket){
+            // if(gotPacket){
             	if (av_write_frame(formatCtx, &ff_output[amount_of_quadrants-1].packet) < 0) {
 	                printf ("Unable to write to output stream..\n");
 	                pthread_exit(NULL);
-            	}
-            	incaudio++;
+            	// }
             }            
-            
+            incaudio += 2880;
 		}
 
 		if (ff_input.packet.stream_index == videoStreamIndex) {
@@ -429,19 +424,9 @@ int main(int argc, char** argv){
 													ff_output[i].codecCtx->time_base,
 													ff_output[i].outStream->time_base);
 
-							uint8_t * data = malloc(ff_output[i].packet.size);
-				            memcpy(data, ff_output[i].packet.data,ff_output[i].packet.size - PADDING_DATA);
-				            memcpy(data + (ff_output[i].packet.size - PADDING_DATA), &inc, PADDING_DATA);
-				            free(ff_output[i].packet.data);
-				            ff_output[i].packet.data = data;
-
-
 							if (av_write_frame (formatCtx, &ff_output[i].packet) < 0) {
 								printf ("Unable to write to output stream..\n");
 								pthread_exit(NULL);
-							}
-							if(!pass_flag){
-								pass_flag = 1;
 							}
 
 						}
@@ -457,9 +442,7 @@ int main(int argc, char** argv){
             	}
             	marginTop = 0; 
             	i = 0;
-            	if(pass_flag){            		
-            		inc++;
-            	}
+            	inc++;
 			}
 			av_frame_free (&ff_input.frame);
 		}
